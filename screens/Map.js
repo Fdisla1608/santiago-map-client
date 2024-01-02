@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, Image, Alert } from "react-native";
 import { useState, useEffect } from "react";
 import axios from "axios";
 import * as Location from "expo-location";
-import Paho from 'paho-mqtt';
+import { Client, Message } from "react-native-paho-mqtt";
 
 export default function Map({ route, navigation }) {
   const [errorMsg, setErrorMsg] = useState(null);
@@ -20,14 +20,30 @@ export default function Map({ route, navigation }) {
     longitude: -70.68483054420817,
   });
 
-  const options = {
-    host: "broker.emqx.io",
-    port: 8083,
-    path: "/testTopic",
-    id: "id_" + parseInt(Math.random() * 100000),
+  const myStorage = {
+    setItem: (key, item) => {
+      myStorage[key] = item;
+    },
+    getItem: (key) => myStorage[key],
+    removeItem: (key) => {
+      delete myStorage[key];
+    },
   };
 
-  client = new Paho.MQTT.Client(options.host, options.port, options.path);
+  const client = new Client({
+    uri: "ws://maptest.ddns.net:8083/mqtt",
+    clientId: "user-" + Math.random().toString(16).substr(2, 8),
+    storage: myStorage,
+  });
+
+  client.on("connectionLost", (responseObject) => {
+    if (responseObject.errorCode !== 0) {
+      console.log(responseObject.errorMessage);
+    }
+  });
+  client.on("messageReceived", (message) => {
+    console.log(message.payloadString);
+  });
 
   const showStopsLocations = () => {
     return rutas.map((item) => {
@@ -79,6 +95,18 @@ export default function Map({ route, navigation }) {
   };
 
   useEffect(() => {
+    axios
+      .get("http://maptest.ddns.net/api/clients")
+      .then((response) => {
+        // Handle the successful response
+        const clients = response.data;
+        console.log("List of clients:", clients);
+      })
+      .catch((error) => {
+        // Handle errors
+        console.error("Error fetching clients:", error);
+      });
+
     axios.get(`http://10.0.0.73:3001/api/maps/rutas`).then((res) => {
       setRutas(res.data);
     });
@@ -99,6 +127,24 @@ export default function Map({ route, navigation }) {
         longitude: location.coords.longitude,
       });
     })();
+
+    client
+      .connect()
+      .then(() => {
+        // Once a connection has been made, make a subscription and send a message.
+        console.log("onConnect");
+        return client.subscribe("World");
+      })
+      .then(() => {
+        const message = new Message("Hello");
+        message.destinationName = "World";
+        client.send(message);
+      })
+      .catch((responseObject) => {
+        if (responseObject.errorCode !== 0) {
+          console.log(responseObject);
+        }
+      });
   }, []);
 
   return (
