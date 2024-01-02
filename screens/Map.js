@@ -107,11 +107,11 @@ export default function Map({ route, navigation }) {
         console.error("Error fetching clients:", error);
       });
 
-    axios.get(`http://10.0.0.73:3001/api/maps/rutas`).then((res) => {
+    axios.get(`http://maptest.ddns.net:3001/api/maps/rutas`).then((res) => {
       setRutas(res.data);
     });
 
-    axios.get(`http://10.0.0.73:3001/api/vehicle/list`).then((res) => {
+    axios.get(`http://maptest.ddns.net:3001/api/vehicle/list`).then((res) => {
       setTrucks(res.data);
     });
 
