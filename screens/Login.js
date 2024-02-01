@@ -8,7 +8,7 @@ export default function Login({ navigation }) {
 
   const pressHandle = async () => {
     axios
-      .post(`http://10.0.0.73:3001/api/user/login`, {
+      .post(`http://maptest.ddns.net:3001/api/user/login`, {
         userName: userName,
         userPassword: userPassword,
       })

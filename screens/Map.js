@@ -6,6 +6,7 @@ import * as Location from "expo-location";
 import { Client, Message } from "react-native-paho-mqtt";
 
 export default function Map({ route, navigation }) {
+  let mytrucks = [];
   const [errorMsg, setErrorMsg] = useState(null);
   const [rutas, setRutas] = useState([]);
   const [trucks, setTrucks] = useState([]);
@@ -30,6 +31,11 @@ export default function Map({ route, navigation }) {
     },
   };
 
+  const auth = {
+    username: "c7011cf0a33cccaf",
+    password: "gzn2WEK5Tj9C2J9AWrlFh22Px6arW71zl66FoecM9AeqFL",
+  };
+
   const client = new Client({
     uri: "ws://maptest.ddns.net:8083/mqtt",
     clientId: "user-" + Math.random().toString(16).substr(2, 8),
@@ -41,8 +47,10 @@ export default function Map({ route, navigation }) {
       console.log(responseObject.errorMessage);
     }
   });
+
   client.on("messageReceived", (message) => {
-    console.log(message.payloadString);
+    mytrucks.push(JSON.parse(message.payloadString));
+    setTrucks(mytrucks);
   });
 
   const showStopsLocations = () => {
@@ -95,25 +103,54 @@ export default function Map({ route, navigation }) {
   };
 
   useEffect(() => {
-    axios
-      .get("http://maptest.ddns.net/api/clients")
-      .then((response) => {
-        // Handle the successful response
-        const clients = response.data;
-        console.log("List of clients:", clients);
+    client
+      .connect()
+      .then(() => {
+        console.log("onConnect");
+        return client.subscribe("mqtt/map");
       })
-      .catch((error) => {
-        // Handle errors
-        console.error("Error fetching clients:", error);
+      .then(() => {
+        console.log("client connected");
+      })
+      .catch((responseObject) => {
+        if (responseObject.errorCode !== 0) {
+          console.log(responseObject);
+        }
       });
 
-    axios.get(`http://maptest.ddns.net:3001/api/maps/rutas`).then((res) => {
-      setRutas(res.data);
-    });
+    setInterval(() => {
+      mytrucks = [];
+      client.send("mqtt/vehicle", "COMMAND:DATA");
+    }, 500);
 
-    axios.get(`http://maptest.ddns.net:3001/api/vehicle/list`).then((res) => {
-      setTrucks(res.data);
-    });
+    setInterval(() => {
+      setTrucks([]);
+    }, 15000);
+
+    axios
+      .get(`http://maptest.ddns.net:18083/api/v5/clients`, {
+        auth,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+      .then((response) => {
+        response.data.data.map((item) => {
+          console.log(item.clientid);
+        });
+      })
+      .catch((error) => {
+        console.log(error);
+      });
+
+    axios
+      .get(`http://maptest.ddns.net:3001/api/maps/rutas`)
+      .then((res) => {
+        setRutas(res.data);
+      })
+      .catch((error) => {
+        console.log(error);
+      });
 
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -127,24 +164,6 @@ export default function Map({ route, navigation }) {
         longitude: location.coords.longitude,
       });
     })();
-
-    client
-      .connect()
-      .then(() => {
-        // Once a connection has been made, make a subscription and send a message.
-        console.log("onConnect");
-        return client.subscribe("World");
-      })
-      .then(() => {
-        const message = new Message("Hello");
-        message.destinationName = "World";
-        client.send(message);
-      })
-      .catch((responseObject) => {
-        if (responseObject.errorCode !== 0) {
-          console.log(responseObject);
-        }
-      });
   }, []);
 
   return (
