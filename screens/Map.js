@@ -5,15 +5,18 @@ import axios from "axios";
 import * as Location from "expo-location";
 import { Client, Message } from "react-native-paho-mqtt";
 
+
 export default function Map({ route, navigation }) {
   let mytrucks = [];
   const [errorMsg, setErrorMsg] = useState(null);
   const [rutas, setRutas] = useState([]);
   const [trucks, setTrucks] = useState([]);
+  const [vehiculos, setVehiculos] = useState({});
 
   const [myPosition, setMyPosition] = useState({
     latitude: 19.446253746017018,
     longitude: -70.68483054420817,
+    angle: 90
   });
 
   const [truckPosition, setTruckPosition] = useState({
@@ -49,8 +52,14 @@ export default function Map({ route, navigation }) {
   });
 
   client.on("messageReceived", (message) => {
-    mytrucks.push(JSON.parse(message.payloadString));
-    setTrucks(mytrucks);
+    const data = JSON.parse(message.payloadString);
+    setVehiculos((prevVehiculos) => ({
+      ...prevVehiculos,
+      [data.ficha]: data,
+    }));
+
+    // mytrucks.push(JSON.parse(message.payloadString));
+    //setTrucks(mytrucks);
   });
 
   const showStopsLocations = () => {
@@ -81,27 +90,6 @@ export default function Map({ route, navigation }) {
     });
   };
 
-  const showTrucks = () => {
-    return trucks.map((item, index) => {
-      return (
-        <Marker key={index} title={item.ficha} coordinate={item.position}>
-          <Image
-            source={require("../bus.png")}
-            className="marker-img"
-            style={{ height: 100, width: 110 }}
-          />
-          <Callout style={{ width: 200, height: 100 }}>
-            <Text>Ficha: {item.ficha}</Text>
-            <Text>Placa: {item.placa}</Text>
-            <Text>Chofer: {item.chofer}</Text>
-            <Text>Asientos Disponibles: {item.asientos_disponibles}</Text>
-            <Text>Ruta: {item.ruta}</Text>
-          </Callout>
-        </Marker>
-      );
-    });
-  };
-
   useEffect(() => {
     client
       .connect()
@@ -120,7 +108,9 @@ export default function Map({ route, navigation }) {
 
     setInterval(() => {
       mytrucks = [];
-      client.send("mqtt/vehicle", "COMMAND:DATA");
+      if (client.isConnected()) {
+        client.send("mqtt/vehicle", "COMMAND:DATA");
+      }
     }, 500);
 
     setInterval(() => {
@@ -136,7 +126,7 @@ export default function Map({ route, navigation }) {
       })
       .then((response) => {
         response.data.data.map((item) => {
-          console.log(item.clientid);
+          // console.log(`ID: ${item.clientid}`);
         });
       })
       .catch((error) => {
@@ -177,11 +167,39 @@ export default function Map({ route, navigation }) {
           longitudeDelta: 0.010869161181560116,
         }}
       >
-        {rutas && showStopsLocations()}
         {rutas && showRoutes()}
-        {trucks && showTrucks()}
+        {rutas && showStopsLocations()}
 
-        <Marker title="My Position" coordinate={myPosition} pinColor="#1982EC">
+        {Object.entries(vehiculos).map(([ficha, item]) => (
+          <Marker
+            key={ficha}
+            title={`F-${item.ficha}`}
+            coordinate={item.position}
+          >
+            <Image
+              source={require("../bus.png")}
+              className="marker-img"
+              style={{ height: 100, width: 110, transform:[{rotate: `${item.position.angle}deg`}] }}
+            />
+            <Callout style={{ width: 200, height: 100 }}>
+              <Text>Ficha: {item.ficha}</Text>
+              <Text>Placa: {item.placa}</Text>
+              <Text>Chofer: {item.chofer}</Text>
+              <Text>Asientos Disponibles: {item.asientos_disponibles}</Text>
+              <Text>Ruta: {item.ruta}</Text>
+            </Callout>
+          </Marker>
+        ))}
+
+        <Marker
+          title="My Position"
+          coordinate={myPosition}
+        >
+          <Image
+            source={require("../position.png")}
+            className="marker-img"
+            style={{ height: 50, width: 50, transform:[{rotate: `${myPosition.angle}deg`}] }}
+          />
           <Callout style={{ width: 200, height: 100 }}>
             <Text>My Position</Text>
             <Text>lat:</Text>
