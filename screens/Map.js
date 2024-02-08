@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import * as Location from "expo-location";
 import { Client, Message } from "react-native-paho-mqtt";
-
+import { Magnetometer } from "expo-sensors";
 
 export default function Map({ route, navigation }) {
   let mytrucks = [];
@@ -12,11 +12,13 @@ export default function Map({ route, navigation }) {
   const [rutas, setRutas] = useState([]);
   const [trucks, setTrucks] = useState([]);
   const [vehiculos, setVehiculos] = useState({});
+  const [angle, setAngle] = useState(0);
+  const [subscription, setSubscription] = useState(null);
 
   const [myPosition, setMyPosition] = useState({
     latitude: 19.446253746017018,
     longitude: -70.68483054420817,
-    angle: 90
+    angle: 90,
   });
 
   const [truckPosition, setTruckPosition] = useState({
@@ -34,6 +36,19 @@ export default function Map({ route, navigation }) {
     },
   };
 
+  const _subscribe = () => {
+    setSubscription(
+      Magnetometer.addListener((result) => {
+        const radianes = Math.atan2(result.y, result.x);
+        let grados = radianes * (180 / Math.PI);
+        if (grados < 0) {
+          grados += 360;
+        }
+        setAngle(grados);
+      })
+    );
+  };
+
   const auth = {
     username: "c7011cf0a33cccaf",
     password: "gzn2WEK5Tj9C2J9AWrlFh22Px6arW71zl66FoecM9AeqFL",
@@ -49,17 +64,6 @@ export default function Map({ route, navigation }) {
     if (responseObject.errorCode !== 0) {
       console.log(responseObject.errorMessage);
     }
-  });
-
-  client.on("messageReceived", (message) => {
-    const data = JSON.parse(message.payloadString);
-    setVehiculos((prevVehiculos) => ({
-      ...prevVehiculos,
-      [data.ficha]: data,
-    }));
-
-    // mytrucks.push(JSON.parse(message.payloadString));
-    //setTrucks(mytrucks);
   });
 
   const showStopsLocations = () => {
@@ -91,6 +95,7 @@ export default function Map({ route, navigation }) {
   };
 
   useEffect(() => {
+    Magnetometer.setUpdateInterval(100);
     client
       .connect()
       .then(() => {
@@ -106,16 +111,13 @@ export default function Map({ route, navigation }) {
         }
       });
 
-    setInterval(() => {
-      mytrucks = [];
-      if (client.isConnected()) {
-        client.send("mqtt/vehicle", "COMMAND:DATA");
-      }
-    }, 500);
-
-    setInterval(() => {
-      setTrucks([]);
-    }, 15000);
+    client.on("messageReceived", (message) => {
+      const data = JSON.parse(message.payloadString);
+      setVehiculos((prevVehiculos) => ({
+        ...prevVehiculos,
+        [data.ficha]: data,
+      }));
+    });
 
     axios
       .get(`http://maptest.ddns.net:18083/api/v5/clients`, {
@@ -126,7 +128,6 @@ export default function Map({ route, navigation }) {
       })
       .then((response) => {
         response.data.data.map((item) => {
-          // console.log(`ID: ${item.clientid}`);
         });
       })
       .catch((error) => {
@@ -154,6 +155,8 @@ export default function Map({ route, navigation }) {
         longitude: location.coords.longitude,
       });
     })();
+
+    _subscribe();
   }, []);
 
   return (
@@ -179,7 +182,11 @@ export default function Map({ route, navigation }) {
             <Image
               source={require("../bus.png")}
               className="marker-img"
-              style={{ height: 100, width: 110, transform:[{rotate: `${item.position.angle}deg`}] }}
+              style={{
+                height: 100,
+                width: 110,
+                transform: [{ rotate: `${item.position.angle}deg` }],
+              }}
             />
             <Callout style={{ width: 200, height: 100 }}>
               <Text>Ficha: {item.ficha}</Text>
@@ -191,14 +198,15 @@ export default function Map({ route, navigation }) {
           </Marker>
         ))}
 
-        <Marker
-          title="My Position"
-          coordinate={myPosition}
-        >
+        <Marker title="My Position" coordinate={myPosition}>
           <Image
             source={require("../position.png")}
             className="marker-img"
-            style={{ height: 50, width: 50, transform:[{rotate: `${myPosition.angle}deg`}] }}
+            style={{
+              height: 50,
+              width: 50,
+              transform: [{ rotate: `${angle + 75}deg` }],
+            }}
           />
           <Callout style={{ width: 200, height: 100 }}>
             <Text>My Position</Text>
